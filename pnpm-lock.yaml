@@ -453,6 +453,12 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  extensions/tgrelay:
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/tlon:
     dependencies:
       '@urbit/aura':
