@@ -26,6 +26,7 @@ import { resolveTelegramFetch } from "./fetch.js";
 import { renderTelegramHtmlText } from "./format.js";
 import { isRecoverableTelegramNetworkError } from "./network-errors.js";
 import { makeProxyFetch } from "./proxy.js";
+import { createRpcTransformer, isRpcEnabled } from "./rpc-transformer.js";
 import { recordSentMessage } from "./sent-message-cache.js";
 import { parseTelegramTarget, stripTelegramInternalPrefixes } from "./targets.js";
 import { resolveTelegramVoiceSend } from "./voice.js";
@@ -213,7 +214,23 @@ export async function sendMessageTelegram(
   // Use provided api or create a new Bot instance. The nullish coalescing
   // operator ensures api is always defined (Bot.api is always non-null).
   const client = resolveTelegramClientOptions(account);
-  const api = opts.api ?? new Bot(token, client ? { client } : undefined).api;
+  let api = opts.api;
+  if (!api) {
+    const bot = new Bot(token, client ? { client } : undefined);
+    // Apply RPC transformer if RPC mode is enabled for this account
+    const telegramCfg = cfg.channels?.telegram;
+    if (isRpcEnabled(telegramCfg?.rpc)) {
+      bot.api.config.use(
+        createRpcTransformer({
+          rpcUrl: telegramCfg!.rpc!.rpcUrl,
+          rpcHeaders: telegramCfg!.rpc!.rpcHeaders,
+          rpcTimeout: telegramCfg!.rpc!.rpcTimeout,
+          excludeMethods: telegramCfg!.rpc!.excludeMethods,
+        }),
+      );
+    }
+    api = bot.api;
+  }
   const mediaUrl = opts.mediaUrl?.trim();
   const replyMarkup = buildInlineKeyboard(opts.buttons);
 

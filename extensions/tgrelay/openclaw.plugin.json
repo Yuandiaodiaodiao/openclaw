@@ -1,9 +1,0 @@
-{
-  "id": "tgrelay",
-  "channels": ["tgrelay"],
-  "configSchema": {
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {}
-  }
-}
