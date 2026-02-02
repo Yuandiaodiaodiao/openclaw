@@ -248,7 +248,7 @@ export async function runPreparedReply(
   const prefixedBody = [threadStarterNote, prefixedBodyBase].filter(Boolean).join("\n\n");
   const mediaNote = buildInboundMediaNote(ctx);
   const mediaReplyHint = mediaNote
-    ? "To send an image back, prefer the message tool (media/path/filePath). If you must inline, use MEDIA:https://example.com/image.jpg (spaces ok, quote if needed) or a safe relative path like MEDIA:./image.jpg. Avoid absolute paths (MEDIA:/...) and ~ paths — they are blocked for security. Keep caption in the text body."
+    ? "To send an image back, prefer the message tool (media/path/filePath). If you must inline, use MEDIA:https://example.com/image.jpg (spaces ok, quote if needed) or a safe relative path like MEDIA:./image.jpg. You can also use MEDIA: paths from tool results (e.g., browser screenshots) directly - those are pre-validated. Avoid arbitrary absolute paths and ~ paths. Keep caption in the text body."
     : undefined;
   let prefixedCommandBody = mediaNote
     ? [mediaNote, mediaReplyHint, prefixedBody ?? ""].filter(Boolean).join("\n").trim()

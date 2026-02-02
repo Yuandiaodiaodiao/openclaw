@@ -25,6 +25,19 @@ export type TelegramNetworkConfig = {
   autoSelectFamily?: boolean;
 };
 
+export type TelegramRpcConfig = {
+  /** Enable RPC mode to forward all bot.api.* calls to an external service. */
+  enabled?: boolean;
+  /** URL of the RPC endpoint that will handle Telegram API calls. */
+  rpcUrl: string;
+  /** Optional headers to include with RPC requests (e.g., Authorization). */
+  rpcHeaders?: Record<string, string>;
+  /** Timeout in milliseconds for RPC requests. Default: 30000. */
+  rpcTimeout?: number;
+  /** Methods to exclude from RPC forwarding (will use direct Telegram API). */
+  excludeMethods?: string[];
+};
+
 export type TelegramInlineButtonsScope = "off" | "dm" | "group" | "all" | "allowlist";
 
 export type TelegramCapabilitiesConfig =
@@ -130,6 +143,8 @@ export type TelegramAccountConfig = {
   heartbeat?: ChannelHeartbeatVisibilityConfig;
   /** Controls whether link previews are shown in outbound messages. Default: true. */
   linkPreview?: boolean;
+  /** RPC mode configuration to forward bot.api.* calls to an external service. */
+  rpc?: TelegramRpcConfig;
 };
 
 export type TelegramTopicConfig = {

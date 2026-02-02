@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { ResolvedTgrelayAccount } from "./accounts.js";
 import type { TgrelayOutboundMessage } from "./types.js";
 import { getTgrelayRuntime } from "./runtime.js";
@@ -116,16 +118,65 @@ export async function sendTgrelayMedia(params: TgrelaySendMediaParams): Promise<
     voice: "sendVoice",
   };
 
-  const payload: TgrelayOutboundMessage = {
-    method: methodMap[params.mediaType] ?? "sendDocument",
-    chat_id: params.chatId,
-    caption: params.caption,
-    parse_mode: params.parseMode ?? "HTML",
-    reply_to_message_id: params.replyToMessageId,
-    message_thread_id: params.messageThreadId,
-    disable_notification: params.disableNotification,
-    [params.mediaType]: params.mediaUrl,
-  };
+  const mediaUrl = params.mediaUrl;
+  const isLocalFile = mediaUrl.startsWith("/") || mediaUrl.startsWith("./");
+
+  let payload: TgrelayOutboundMessage;
+
+  if (isLocalFile) {
+    // Read local file and send as base64
+    try {
+      const fileBuffer = await fs.readFile(mediaUrl);
+      const base64 = fileBuffer.toString("base64");
+      const filename = path.basename(mediaUrl);
+      const ext = path.extname(mediaUrl).toLowerCase();
+      const mimeMap: Record<string, string> = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".mp4": "video/mp4",
+        ".mp3": "audio/mpeg",
+        ".ogg": "audio/ogg",
+        ".pdf": "application/pdf",
+      };
+
+      payload = {
+        method: methodMap[params.mediaType] ?? "sendDocument",
+        chat_id: params.chatId,
+        caption: params.caption,
+        parse_mode: params.parseMode ?? "HTML",
+        reply_to_message_id: params.replyToMessageId,
+        message_thread_id: params.messageThreadId,
+        disable_notification: params.disableNotification,
+        file_data: {
+          base64,
+          filename,
+          mime_type: mimeMap[ext],
+        },
+      };
+    } catch (err) {
+      const runtime = getTgrelayRuntime();
+      runtime.log?.(`tgrelay failed to read local file: ${err}`);
+      return {
+        ok: false,
+        error: `Failed to read local file: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  } else {
+    // URL or file_id - send directly
+    payload = {
+      method: methodMap[params.mediaType] ?? "sendDocument",
+      chat_id: params.chatId,
+      caption: params.caption,
+      parse_mode: params.parseMode ?? "HTML",
+      reply_to_message_id: params.replyToMessageId,
+      message_thread_id: params.messageThreadId,
+      disable_notification: params.disableNotification,
+      [params.mediaType]: mediaUrl,
+    };
+  }
 
   return sendToOutbound(params.account, payload);
 }

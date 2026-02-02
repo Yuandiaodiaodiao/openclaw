@@ -183,12 +183,18 @@ export type TgrelayOutboundMessage = {
       }>
     >;
   };
-  // For media
-  photo?: string; // URL or file_id
+  // For media - URL, file_id, or base64 data
+  photo?: string;
   document?: string;
   audio?: string;
   video?: string;
   voice?: string;
+  // For local file uploads (base64 encoded)
+  file_data?: {
+    base64: string;
+    filename: string;
+    mime_type?: string;
+  };
 };
 
 // Config types

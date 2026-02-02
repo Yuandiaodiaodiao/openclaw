@@ -46,6 +46,7 @@ import {
   resolveTelegramStreamMode,
 } from "./bot/helpers.js";
 import { resolveTelegramFetch } from "./fetch.js";
+import { createRpcTransformer, isRpcEnabled } from "./rpc-transformer.js";
 import { wasSentByBot } from "./sent-message-cache.js";
 
 export type TelegramBotOptions = {
@@ -144,6 +145,23 @@ export function createTelegramBot(opts: TelegramBotOptions) {
 
   const bot = new Bot(opts.token, client ? { client } : undefined);
   bot.api.config.use(apiThrottler());
+
+  // RPC mode: forward all bot.api.* calls to external RPC endpoint
+  if (isRpcEnabled(telegramCfg.rpc)) {
+    bot.api.config.use(
+      createRpcTransformer({
+        rpcUrl: telegramCfg.rpc!.rpcUrl,
+        rpcHeaders: telegramCfg.rpc!.rpcHeaders,
+        rpcTimeout: telegramCfg.rpc!.rpcTimeout,
+        excludeMethods: telegramCfg.rpc!.excludeMethods,
+        onError: (method, error) => {
+          runtime.error?.(danger(`telegram RPC error (${method}): ${error.message}`));
+        },
+      }),
+    );
+    logVerbose(`telegram: RPC mode enabled, forwarding to ${telegramCfg.rpc!.rpcUrl}`);
+  }
+
   bot.use(sequentialize(getTelegramSequentialKey));
   bot.catch((err) => {
     runtime.error?.(danger(`telegram bot error: ${formatUncaughtError(err)}`));

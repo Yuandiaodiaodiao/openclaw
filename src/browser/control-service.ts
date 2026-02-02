@@ -1,7 +1,11 @@
+import type { Server } from "node:http";
+import express from "express";
+import type { BrowserRouteRegistrar } from "./routes/types.js";
 import { loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveBrowserConfig, resolveProfile } from "./config.js";
 import { ensureChromeExtensionRelayServer } from "./extension-relay.js";
+import { registerBrowserRoutes } from "./routes/index.js";
 import { type BrowserServerState, createBrowserRouteContext } from "./server-context.js";
 
 let state: BrowserServerState | null = null;
@@ -29,9 +33,31 @@ export async function startBrowserControlServiceFromConfig(): Promise<BrowserSer
     return null;
   }
 
+  // Start HTTP server for browser control
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+
+  const ctx = createBrowserRouteContext({
+    getState: () => state,
+  });
+  registerBrowserRoutes(app as unknown as BrowserRouteRegistrar, ctx);
+
+  const port = resolved.controlPort;
+  const server = await new Promise<Server>((resolve, reject) => {
+    const s = app.listen(port, "127.0.0.1", () => resolve(s));
+    s.once("error", reject);
+  }).catch((err) => {
+    logService.error(`openclaw browser server failed to bind 127.0.0.1:${port}: ${String(err)}`);
+    return null;
+  });
+
+  if (!server) {
+    return null;
+  }
+
   state = {
-    server: null,
-    port: resolved.controlPort,
+    server,
+    port,
     resolved,
     profiles: new Map(),
   };
@@ -48,9 +74,7 @@ export async function startBrowserControlServiceFromConfig(): Promise<BrowserSer
     });
   }
 
-  logService.info(
-    `Browser control service ready (profiles=${Object.keys(resolved.profiles).length})`,
-  );
+  logService.info(`Browser control listening on http://127.0.0.1:${port}/`);
   return state;
 }
 
@@ -76,6 +100,12 @@ export async function stopBrowserControlService(): Promise<void> {
     logService.warn(`openclaw browser stop failed: ${String(err)}`);
   }
 
+  // Close HTTP server
+  if (current.server) {
+    await new Promise<void>((resolve) => {
+      current.server?.close(() => resolve());
+    });
+  }
   state = null;
 
   // Optional: Playwright is not always available (e.g. embedded gateway builds).

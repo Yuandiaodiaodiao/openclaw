@@ -387,11 +387,23 @@ export const tgrelayPlugin: ChannelPlugin<ResolvedTgrelayAccount> = {
       const account = resolveTgrelayAccount({ cfg, accountId });
       const chatId = /^-?\d+$/.test(to) ? Number(to) : to;
       const { sendTgrelayMedia } = await import("./api.js");
+      // Detect media type from URL/path extension
+      const ext = mediaUrl.split(".").pop()?.toLowerCase() ?? "";
+      const imageExts = ["jpg", "jpeg", "png", "gif", "webp"];
+      const videoExts = ["mp4", "mov", "avi", "webm"];
+      const audioExts = ["mp3", "ogg", "wav", "m4a"];
+      const mediaType = imageExts.includes(ext)
+        ? "photo"
+        : videoExts.includes(ext)
+          ? "video"
+          : audioExts.includes(ext)
+            ? "audio"
+            : "document";
       const result = await sendTgrelayMedia({
         account,
         chatId,
         mediaUrl,
-        mediaType: "document",
+        mediaType,
         caption: text,
         replyToMessageId: replyToId ? Number(replyToId) : undefined,
         messageThreadId: threadId ? Number(threadId) : undefined,
