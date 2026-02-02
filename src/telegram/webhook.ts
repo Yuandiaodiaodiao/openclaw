@@ -51,6 +51,7 @@ export async function startTelegramWebhook(opts: {
   });
   const handler = webhookCallback(bot, "http", {
     secretToken: opts.secret,
+    timeoutMilliseconds: 60_000, // 1 minute timeout for AI processing
   });
 
   if (diagnosticsEnabled) {

@@ -124,6 +124,13 @@ const DOCKS: Record<ChatChannelId, ChannelDock> = {
         };
       },
     },
+    agentPrompt: {
+      messageToolHints: () => [
+        "- To send images/photos: use `message` tool with `action=send` and `media=<url>`. The URL can be a direct image URL or a file path.",
+        "- To send documents/files: use `message` tool with `action=send`, `media=<url>`, and optionally `filename=<name>`.",
+        "- To send voice messages: use `message` tool with `action=send`, `media=<audio_url>`, and `asVoice=true`.",
+      ],
+    },
   },
   whatsapp: {
     id: "whatsapp",

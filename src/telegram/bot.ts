@@ -524,5 +524,5 @@ export function createTelegramBot(opts: TelegramBotOptions) {
 }
 
 export function createTelegramWebhookCallback(bot: Bot, path = "/telegram-webhook") {
-  return { path, handler: webhookCallback(bot, "http") };
+  return { path, handler: webhookCallback(bot, "http", { timeoutMilliseconds: 60_000 }) };
 }
