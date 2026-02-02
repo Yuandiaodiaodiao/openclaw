@@ -132,6 +132,8 @@ async function resolveTelegramCommandAuth(params: {
     messageThreadId?: number,
   ) => { groupConfig?: TelegramGroupConfig; topicConfig?: TelegramTopicConfig };
   requireAuth: boolean;
+  /** When true, bypass all authentication checks (for external integration). */
+  bypassAuth?: boolean;
 }): Promise<TelegramCommandAuthResult | null> {
   const {
     msg,
@@ -144,6 +146,7 @@ async function resolveTelegramCommandAuth(params: {
     resolveGroupPolicy,
     resolveTelegramGroupConfig,
     requireAuth,
+    bypassAuth,
   } = params;
   const chatId = msg.chat.id;
   const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
@@ -179,7 +182,8 @@ async function resolveTelegramCommandAuth(params: {
     });
     return null;
   }
-  if (requireAuth && isGroup && hasGroupAllowOverride) {
+  // When bypassAuth is true, skip all authorization checks (for external integration)
+  if (requireAuth && isGroup && hasGroupAllowOverride && !bypassAuth) {
     if (
       senderIdRaw == null ||
       !isSenderAllowed({
@@ -196,7 +200,7 @@ async function resolveTelegramCommandAuth(params: {
     }
   }
 
-  if (isGroup && useAccessGroups) {
+  if (isGroup && useAccessGroups && !bypassAuth) {
     const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
     const groupPolicy = telegramCfg.groupPolicy ?? defaultGroupPolicy ?? "open";
     if (groupPolicy === "disabled") {
@@ -236,17 +240,19 @@ async function resolveTelegramCommandAuth(params: {
     allowFrom: allowFrom,
     storeAllowFrom,
   });
-  const senderAllowed = isSenderAllowed({
+  // When bypassAuth is true, always consider sender allowed
+  const senderAllowed = bypassAuth || isSenderAllowed({
     allow: dmAllow,
     senderId,
     senderUsername,
   });
-  const commandAuthorized = resolveCommandAuthorizedFromAuthorizers({
+  // When bypassAuth is true, always authorize commands
+  const commandAuthorized = bypassAuth || resolveCommandAuthorizedFromAuthorizers({
     useAccessGroups,
     authorizers: [{ configured: dmAllow.hasEntries, allowed: senderAllowed }],
     modeWhenAccessGroupsOff: "configured",
   });
-  if (requireAuth && !commandAuthorized) {
+  if (requireAuth && !commandAuthorized && !bypassAuth) {
     await withTelegramApiErrorLogging({
       operation: "sendMessage",
       fn: () => bot.api.sendMessage(chatId, "You are not authorized to use this command."),
@@ -393,6 +399,7 @@ export const registerTelegramNativeCommands = ({
             resolveGroupPolicy,
             resolveTelegramGroupConfig,
             requireAuth: true,
+            bypassAuth: telegramCfg.bypassAuth,
           });
           if (!auth) {
             return;
@@ -626,6 +633,7 @@ export const registerTelegramNativeCommands = ({
             resolveGroupPolicy,
             resolveTelegramGroupConfig,
             requireAuth: match.command.requireAuth !== false,
+            bypassAuth: telegramCfg.bypassAuth,
           });
           if (!auth) {
             return;

@@ -113,24 +113,132 @@ RPC 端点应返回 Telegram Bot API 的标准响应格式：
 2. 所有 Telegram API 调用通过 relay-server 统一处理
 3. relay-server 可以添加额外的鉴权和限流逻辑
 
+### HoldClaw RPC 端点实现
+
+HoldClaw 的 relay-server 提供了 `/api/telegram-rpc/[chatId]` 端点来处理 RPC 调用：
+
+```typescript
+// relay-server/src/app/api/telegram-rpc/[chatId]/route.ts
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ chatId: string }> }
+) {
+  const { chatId } = await params;
+  
+  // 验证 Authorization header
+  const authHeader = request.headers.get('Authorization');
+  const providedSecret = authHeader?.replace('Bearer ', '');
+  
+  // 查询用户并验证 secret
+  const user = await dbGetAsync(
+    'SELECT inbound_secret FROM users WHERE chat_id = $1',
+    [chatId]
+  );
+  
+  if (!user || user.inbound_secret !== providedSecret) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  const { method, ...payload } = await request.json();
+  const bot = getSenderBot();
+  
+  // 根据 method 调用对应的 Telegram API
+  switch (method) {
+    case 'sendMessage':
+      const result = await bot.api.sendMessage(payload.chat_id, payload.text, ...);
+      return NextResponse.json({ ok: true, result });
+    // ... 其他方法
+  }
+}
+```
+
+### HoldClaw 环境变量配置
+
+在创建用户容器时，通过环境变量启用 RPC：
+
+```bash
+TELEGRAM_RPC_ENABLED=true
+TELEGRAM_RPC_URL=http://host.docker.internal:3001/api/telegram-rpc/{chatId}
+TELEGRAM_RPC_SECRET={inbound_secret}
+```
+
+### HoldClaw docker-entrypoint.sh 配置生成
+
+```bash
+# 生成 telegram channel 配置（带 RPC）
+if [ -n "${TELEGRAM_RPC_URL}" ] && [ "${TELEGRAM_RPC_ENABLED}" = "true" ]; then
+  TELEGRAM_CONFIG="
+    telegram: {
+      enabled: true,
+      botToken: \"placeholder\",
+      rpc: {
+        enabled: true,
+        rpcUrl: \"${TELEGRAM_RPC_URL}\",
+        rpcHeaders: {
+          \"Authorization\": \"Bearer ${TELEGRAM_RPC_SECRET}\"
+        },
+        rpcTimeout: 30000
+      },
+      dmPolicy: \"open\",
+      groupPolicy: \"disabled\"
+    }"
+fi
+```
+
 ### 配置示例（HoldClaw）
 
 ```json5
 {
   channels: {
+    // tgrelay - HTTP webhook 方式（不使用 grammY）
+    tgrelay: {
+      enabled: true,
+      outboundUrl: "http://relay-server:3001/api/openclaw-reply",
+      inboundSecret: "${INBOUND_SECRET}",
+      // ...
+    },
+    // telegram - grammY Bot 带 RPC 模式
     telegram: {
+      enabled: true,
       botToken: "placeholder",
       rpc: {
         enabled: true,
-        rpcUrl: "http://relay-server:3001/api/telegram-rpc",
+        rpcUrl: "http://relay-server:3001/api/telegram-rpc/${CHAT_ID}",
         rpcHeaders: {
           "Authorization": "Bearer ${TGRELAY_INBOUND_SECRET}"
         }
-      }
+      },
+      dmPolicy: "open",
+      groupPolicy: "disabled"
     }
   }
 }
 ```
+
+### 支持的 RPC 方法
+
+HoldClaw relay-server 的 RPC 端点支持以下 Telegram Bot API 方法：
+
+| 方法 | 说明 |
+|------|------|
+| `getMe` | 获取 bot 信息 |
+| `sendMessage` | 发送文本消息 |
+| `sendPhoto` | 发送图片 |
+| `sendDocument` | 发送文档 |
+| `sendAudio` | 发送音频 |
+| `sendVideo` | 发送视频 |
+| `sendVoice` | 发送语音 |
+| `sendAnimation` | 发送动画 |
+| `sendSticker` | 发送贴纸 |
+| `editMessageText` | 编辑消息文本 |
+| `deleteMessage` | 删除消息 |
+| `setMessageReaction` | 设置消息反应 |
+| `answerCallbackQuery` | 回复回调查询 |
+| `sendChatAction` | 发送聊天动作 |
+| `getFile` | 获取文件信息 |
+| `getChatMember` | 获取聊天成员 |
+| `getChat` | 获取聊天信息 |
+| ... | 更多方法 |
 
 ## 错误处理
 

@@ -26,6 +26,9 @@ export const createTelegramMessageProcessor = (deps) => {
     resolveBotTopicsEnabled,
   } = deps;
 
+  // Resolve bypassAuth from telegramCfg (for external integration)
+  const bypassAuth = telegramCfg?.bypassAuth === true;
+
   return async (primaryCtx, allMedia, storeAllowFrom, options) => {
     const context = await buildTelegramMessageContext({
       primaryCtx,
@@ -45,6 +48,7 @@ export const createTelegramMessageProcessor = (deps) => {
       resolveGroupActivation,
       resolveGroupRequireMention,
       resolveTelegramGroupConfig,
+      bypassAuth,
     });
     if (!context) {
       return;

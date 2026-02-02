@@ -107,6 +107,8 @@ type BuildTelegramMessageContextParams = {
   resolveGroupActivation: ResolveGroupActivation;
   resolveGroupRequireMention: ResolveGroupRequireMention;
   resolveTelegramGroupConfig: ResolveTelegramGroupConfig;
+  /** When true, bypass all DM/group auth checks (for external integration). */
+  bypassAuth?: boolean;
 };
 
 async function resolveStickerVisionSupport(params: {
@@ -147,6 +149,7 @@ export const buildTelegramMessageContext = async ({
   resolveGroupActivation,
   resolveGroupRequireMention,
   resolveTelegramGroupConfig,
+  bypassAuth,
 }: BuildTelegramMessageContextParams) => {
   const msg = primaryCtx.message;
   recordChannelActivity({
@@ -222,7 +225,8 @@ export const buildTelegramMessageContext = async ({
   };
 
   // DM access control (secure defaults): "pairing" (default) / "allowlist" / "open" / "disabled"
-  if (!isGroup) {
+  // When bypassAuth is true, skip all DM authentication checks (for external integration)
+  if (!isGroup && !bypassAuth) {
     if (dmPolicy === "disabled") {
       return null;
     }
@@ -307,7 +311,8 @@ export const buildTelegramMessageContext = async ({
   const botUsername = primaryCtx.me?.username?.toLowerCase();
   const senderId = msg.from?.id ? String(msg.from.id) : "";
   const senderUsername = msg.from?.username ?? "";
-  if (isGroup && hasGroupAllowOverride) {
+  // When bypassAuth is true, skip group allowlist checks (for external integration)
+  if (isGroup && hasGroupAllowOverride && !bypassAuth) {
     const allowed = isSenderAllowed({
       allow: effectiveGroupAllow,
       senderId,
@@ -321,7 +326,8 @@ export const buildTelegramMessageContext = async ({
     }
   }
   const allowForCommands = isGroup ? effectiveGroupAllow : effectiveDmAllow;
-  const senderAllowedForCommands = isSenderAllowed({
+  // When bypassAuth is true, always authorize commands
+  const senderAllowedForCommands = bypassAuth || isSenderAllowed({
     allow: allowForCommands,
     senderId,
     senderUsername,

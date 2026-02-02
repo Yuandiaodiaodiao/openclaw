@@ -407,16 +407,21 @@ export const telegramPlugin: ChannelPlugin<ResolvedTelegramAccount> = {
         }
       }
       ctx.log?.info(`[${account.accountId}] starting provider${telegramBotLabel}`);
+      // Determine if RPC mode is enabled (relay-server handles webhook registration)
+      const rpcEnabled = Boolean(account.config.rpc?.enabled && account.config.rpc?.rpcUrl);
+      // In RPC mode with webhookPath, use webhook mode but skip setWebhook call
+      const useWebhook = Boolean(account.config.webhookUrl) || (rpcEnabled && Boolean(account.config.webhookPath));
       return getTelegramRuntime().channel.telegram.monitorTelegramProvider({
         token,
         accountId: account.accountId,
         config: ctx.cfg,
         runtime: ctx.runtime,
         abortSignal: ctx.abortSignal,
-        useWebhook: Boolean(account.config.webhookUrl),
+        useWebhook,
         webhookUrl: account.config.webhookUrl,
         webhookSecret: account.config.webhookSecret,
         webhookPath: account.config.webhookPath,
+        skipSetWebhook: rpcEnabled,
       });
     },
     logoutAccount: async ({ accountId, cfg }) => {

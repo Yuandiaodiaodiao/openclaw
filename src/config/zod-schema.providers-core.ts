@@ -85,6 +85,16 @@ const validateTelegramCustomCommands = (
   }
 };
 
+// RPC configuration for external bot API forwarding (HoldClaw integration)
+const TelegramRpcConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    rpcUrl: z.string().optional(),
+    rpcHeaders: z.record(z.string(), z.string()).optional(),
+    rpcTimeout: z.number().int().positive().optional(),
+  })
+  .strict();
+
 export const TelegramAccountSchemaBase = z
   .object({
     name: z.string().optional(),
@@ -137,6 +147,10 @@ export const TelegramAccountSchemaBase = z
     reactionLevel: z.enum(["off", "ack", "minimal", "extensive"]).optional(),
     heartbeat: ChannelHeartbeatVisibilitySchema,
     linkPreview: z.boolean().optional(),
+    // HoldClaw external integration fields
+    bypassAuth: z.boolean().optional(), // Skip auth checks when auth handled externally
+    presetChatId: z.union([z.string(), z.number()]).optional(), // Preset chat ID for external integration
+    rpc: TelegramRpcConfigSchema.optional(), // RPC mode - forward bot.api.* calls to relay-server
   })
   .strict();
 

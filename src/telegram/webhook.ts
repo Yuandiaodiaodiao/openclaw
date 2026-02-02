@@ -29,6 +29,12 @@ export async function startTelegramWebhook(opts: {
   abortSignal?: AbortSignal;
   healthPath?: string;
   publicUrl?: string;
+  /**
+   * Skip calling setWebhook on Telegram API.
+   * Used in RPC mode where the relay-server manages the webhook registration,
+   * and the container only needs to listen for forwarded updates.
+   */
+  skipSetWebhook?: boolean;
 }) {
   const path = opts.path ?? "/telegram-webhook";
   const healthPath = opts.healthPath ?? "/healthz";
@@ -99,15 +105,20 @@ export async function startTelegramWebhook(opts: {
   const publicUrl =
     opts.publicUrl ?? `http://${host === "0.0.0.0" ? "localhost" : host}:${port}${path}`;
 
-  await withTelegramApiErrorLogging({
-    operation: "setWebhook",
-    runtime,
-    fn: () =>
-      bot.api.setWebhook(publicUrl, {
-        secret_token: opts.secret,
-        allowed_updates: resolveTelegramAllowedUpdates(),
-      }),
-  });
+  // In RPC mode, skip setWebhook - the relay-server manages webhook registration
+  if (!opts.skipSetWebhook) {
+    await withTelegramApiErrorLogging({
+      operation: "setWebhook",
+      runtime,
+      fn: () =>
+        bot.api.setWebhook(publicUrl, {
+          secret_token: opts.secret,
+          allowed_updates: resolveTelegramAllowedUpdates(),
+        }),
+    });
+  } else {
+    runtime.log?.("webhook: skipping setWebhook (RPC mode)");
+  }
 
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   runtime.log?.(`webhook listening on ${publicUrl}`);
