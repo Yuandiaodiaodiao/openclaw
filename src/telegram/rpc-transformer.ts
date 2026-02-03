@@ -86,8 +86,40 @@ async function processPayloadForRpc(
 }
 
 /**
+ * Methods that are "fire-and-forget" - errors should not break the RPC loop.
+ * These are typically outbound messages where failure just means the message wasn't sent.
+ */
+const SOFT_FAIL_METHODS = new Set([
+  "sendMessage",
+  "sendPhoto",
+  "sendDocument",
+  "sendAudio",
+  "sendVideo",
+  "sendVoice",
+  "sendAnimation",
+  "sendSticker",
+  "sendMediaGroup",
+  "sendLocation",
+  "sendContact",
+  "sendPoll",
+  "sendDice",
+  "editMessageText",
+  "deleteMessage",
+  "setMessageReaction",
+  "sendChatAction",
+  "forwardMessage",
+  "copyMessage",
+  "pinChatMessage",
+  "unpinChatMessage",
+  "unpinAllChatMessages",
+]);
+
+/**
  * Creates a grammY transformer that forwards all bot.api.* calls to an external RPC endpoint.
  * This allows relay servers to handle Telegram API calls instead of the bot calling Telegram directly.
+ * 
+ * For "fire-and-forget" methods (sendMessage, etc.), network errors are logged but not thrown,
+ * preventing the RPC loop from being interrupted by transient Telegram API failures.
  */
 export function createRpcTransformer(opts: RpcTransformerOptions): Transformer {
   const excludeMethods = new Set(opts.excludeMethods ?? []);
@@ -128,6 +160,13 @@ export function createRpcTransformer(opts: RpcTransformerOptions): Transformer {
     } catch (error) {
       clearTimeout(timeoutId);
       opts.onError?.(method, error as Error);
+      
+      // For fire-and-forget methods, return a soft failure instead of throwing.
+      // This prevents transient Telegram API errors from breaking the RPC loop.
+      if (SOFT_FAIL_METHODS.has(method)) {
+        return { ok: false, error: (error as Error).message, soft_fail: true };
+      }
+      
       throw error;
     }
   };
