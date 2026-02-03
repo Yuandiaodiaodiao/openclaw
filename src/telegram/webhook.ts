@@ -1,4 +1,3 @@
-import { webhookCallback } from "grammy";
 import { createServer } from "node:http";
 import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -49,14 +48,20 @@ export async function startTelegramWebhook(opts: {
     config: opts.config,
     accountId: opts.accountId,
   });
-  const handler = webhookCallback(bot, "http", {
-    secretToken: opts.secret,
-    timeoutMilliseconds: 60_000, // 1 minute timeout for AI processing
-  });
 
   if (diagnosticsEnabled) {
     startDiagnosticHeartbeat();
   }
+
+  // Initialize the bot (fetch bot info via getMe) before handling updates.
+  // This is required for grammY's handleUpdate() to work properly.
+  // In RPC mode, getMe is forwarded to the relay-server via rpc-transformer.
+  await withTelegramApiErrorLogging({
+    operation: "init",
+    runtime,
+    fn: () => bot.init(),
+  });
+  runtime.log?.(`bot initialized: @${bot.botInfo.username}`);
 
   const server = createServer((req, res) => {
     if (req.url === healthPath) {
@@ -73,34 +78,65 @@ export async function startTelegramWebhook(opts: {
     if (diagnosticsEnabled) {
       logWebhookReceived({ channel: "telegram", updateType: "telegram-post" });
     }
-    const handled = handler(req, res);
-    if (handled && typeof handled.catch === "function") {
-      void handled
-        .then(() => {
-          if (diagnosticsEnabled) {
-            logWebhookProcessed({
-              channel: "telegram",
-              updateType: "telegram-post",
-              durationMs: Date.now() - startTime,
-            });
-          }
-        })
-        .catch((err) => {
-          const errMsg = formatErrorMessage(err);
-          if (diagnosticsEnabled) {
-            logWebhookError({
-              channel: "telegram",
-              updateType: "telegram-post",
-              error: errMsg,
-            });
-          }
-          runtime.log?.(`webhook handler failed: ${errMsg}`);
-          if (!res.headersSent) {
-            res.writeHead(500);
-          }
-          res.end();
-        });
+
+    // Verify secret token before accepting
+    const secretToken = req.headers["x-telegram-bot-api-secret-token"];
+    if (opts.secret && secretToken !== opts.secret) {
+      res.writeHead(401);
+      res.end("Unauthorized");
+      return;
     }
+
+    // Read request body
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+
+    req.on("end", () => {
+      // Immediately return 202 Accepted - processing will happen asynchronously
+      // AI responses will be sent back via RPC calls to the relay-server
+      res.writeHead(202);
+      res.end("Accepted");
+
+      // Process the update asynchronously
+      try {
+        const update = JSON.parse(body);
+        // Use bot.handleUpdate directly for async processing
+        void bot
+          .handleUpdate(update)
+          .then(() => {
+            if (diagnosticsEnabled) {
+              logWebhookProcessed({
+                channel: "telegram",
+                updateType: "telegram-post",
+                durationMs: Date.now() - startTime,
+              });
+            }
+          })
+          .catch((err) => {
+            const errMsg = formatErrorMessage(err);
+            if (diagnosticsEnabled) {
+              logWebhookError({
+                channel: "telegram",
+                updateType: "telegram-post",
+                error: errMsg,
+              });
+            }
+            runtime.log?.(`webhook handler failed: ${errMsg}`);
+          });
+      } catch (err) {
+        const errMsg = formatErrorMessage(err);
+        runtime.log?.(`webhook parse error: ${errMsg}`);
+        if (diagnosticsEnabled) {
+          logWebhookError({
+            channel: "telegram",
+            updateType: "telegram-post",
+            error: errMsg,
+          });
+        }
+      }
+    });
   });
 
   const publicUrl =
