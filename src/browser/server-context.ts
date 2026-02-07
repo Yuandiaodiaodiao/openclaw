@@ -510,7 +510,7 @@ function createProfileContext(
         `reset-profile is only supported for local profiles (profile "${profile.name}" is remote).`,
       );
     }
-    const userDataDir = resolveOpenClawUserDataDir(profile.name);
+    const userDataDir = resolveOpenClawUserDataDir(profile.name, state().resolved.dataDir);
     const profileState = getProfileState();
 
     const httpReachable = await isHttpReachable(300);

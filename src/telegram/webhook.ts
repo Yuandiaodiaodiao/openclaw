@@ -1,8 +1,10 @@
 import { createServer } from "node:http";
 import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
+import { computeBackoff, sleepWithAbort, type BackoffPolicy } from "../infra/backoff.js";
 import { isDiagnosticsEnabled } from "../infra/diagnostic-events.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { formatDurationMs } from "../infra/format-duration.js";
 import {
   logWebhookError,
   logWebhookProcessed,
@@ -14,6 +16,23 @@ import { defaultRuntime } from "../runtime.js";
 import { resolveTelegramAllowedUpdates } from "./allowed-updates.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { createTelegramBot } from "./bot.js";
+import { isRecoverableTelegramNetworkError } from "./network-errors.js";
+
+/**
+ * Backoff policy for retrying bot.init() on recoverable network errors.
+ * Starts at 2 seconds, increases exponentially up to 30 seconds.
+ */
+const WEBHOOK_INIT_RETRY_POLICY: BackoffPolicy = {
+  initialMs: 2000,
+  maxMs: 30_000,
+  factor: 1.8,
+  jitter: 0.25,
+};
+
+/**
+ * Maximum number of retry attempts for bot.init() before giving up.
+ */
+const WEBHOOK_INIT_MAX_RETRIES = 10;
 
 export async function startTelegramWebhook(opts: {
   token: string;
@@ -56,11 +75,48 @@ export async function startTelegramWebhook(opts: {
   // Initialize the bot (fetch bot info via getMe) before handling updates.
   // This is required for grammY's handleUpdate() to work properly.
   // In RPC mode, getMe is forwarded to the relay-server via rpc-transformer.
-  await withTelegramApiErrorLogging({
-    operation: "init",
-    runtime,
-    fn: () => bot.init(),
-  });
+  // Retry on recoverable network errors with exponential backoff.
+  let initAttempts = 0;
+  while (true) {
+    try {
+      await withTelegramApiErrorLogging({
+        operation: "init",
+        runtime,
+        fn: () => bot.init(),
+      });
+      break; // Success, exit retry loop
+    } catch (err) {
+      initAttempts++;
+      const isRecoverable = isRecoverableTelegramNetworkError(err, { context: "webhook" });
+
+      // Check if error message contains RPC HTTP error (relay-server temporary failure)
+      const errMsg = formatErrorMessage(err);
+      const isRpcError = errMsg.includes("RPC HTTP");
+
+      if ((!isRecoverable && !isRpcError) || initAttempts >= WEBHOOK_INIT_MAX_RETRIES) {
+        // Non-recoverable error or max retries exceeded, give up
+        if (initAttempts >= WEBHOOK_INIT_MAX_RETRIES) {
+          runtime.error?.(`bot init failed after ${initAttempts} attempts, giving up`);
+        }
+        throw err;
+      }
+
+      // Recoverable error, retry with backoff
+      const delayMs = computeBackoff(WEBHOOK_INIT_RETRY_POLICY, initAttempts);
+      runtime.log?.(
+        `bot init failed (attempt ${initAttempts}/${WEBHOOK_INIT_MAX_RETRIES}): ${errMsg}; retrying in ${formatDurationMs(delayMs)}`,
+      );
+
+      try {
+        await sleepWithAbort(delayMs, opts.abortSignal);
+      } catch (sleepErr) {
+        if (opts.abortSignal?.aborted) {
+          throw new Error("aborted during init retry", { cause: sleepErr });
+        }
+        throw sleepErr;
+      }
+    }
+  }
   runtime.log?.(`bot initialized: @${bot.botInfo.username}`);
 
   const server = createServer((req, res) => {

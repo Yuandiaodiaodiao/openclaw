@@ -1,6 +1,7 @@
 import type { ApiClientOptions } from "grammy";
 // @ts-nocheck
-import { sequentialize } from "@grammyjs/runner";
+// NOTE: sequentialize removed - fire-and-forget mode for better throughput
+// import { sequentialize } from "@grammyjs/runner";
 import { apiThrottler } from "@grammyjs/transformer-throttler";
 import { ReactionTypeEmoji } from "@grammyjs/types";
 import { Bot, webhookCallback } from "grammy";
@@ -162,7 +163,12 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     logVerbose(`telegram: RPC mode enabled, forwarding to ${telegramCfg.rpc!.rpcUrl}`);
   }
 
-  bot.use(sequentialize(getTelegramSequentialKey));
+  // NOTE: sequentialize middleware removed for fire-and-forget mode
+  // This allows each message to be processed independently without waiting for previous messages.
+  // Trade-off: Messages from the same chat may be processed out of order, but this prevents
+  // a slow/stuck message from blocking all subsequent messages in the queue.
+  // bot.use(sequentialize(getTelegramSequentialKey));
+
   bot.catch((err) => {
     runtime.error?.(danger(`telegram bot error: ${formatUncaughtError(err)}`));
   });

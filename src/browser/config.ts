@@ -30,6 +30,8 @@ export type ResolvedBrowserConfig = {
   attachOnly: boolean;
   defaultProfile: string;
   profiles: Record<string, BrowserProfileConfig>;
+  /** Custom data directory for browser profiles. If undefined, uses default ~/.openclaw/browser */
+  dataDir?: string;
 };
 
 export type ResolvedBrowserProfile = {
@@ -208,6 +210,9 @@ export function resolveBrowserConfig(
       ? DEFAULT_BROWSER_DEFAULT_PROFILE_NAME
       : DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME);
 
+  // Resolve custom dataDir if provided
+  const dataDir = cfg?.dataDir?.trim() || undefined;
+
   return {
     enabled,
     evaluateEnabled,
@@ -224,6 +229,7 @@ export function resolveBrowserConfig(
     attachOnly,
     defaultProfile,
     profiles,
+    dataDir,
   };
 }
 

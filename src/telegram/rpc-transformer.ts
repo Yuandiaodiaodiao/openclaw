@@ -117,7 +117,7 @@ const SOFT_FAIL_METHODS = new Set([
 /**
  * Creates a grammY transformer that forwards all bot.api.* calls to an external RPC endpoint.
  * This allows relay servers to handle Telegram API calls instead of the bot calling Telegram directly.
- * 
+ *
  * For "fire-and-forget" methods (sendMessage, etc.), network errors are logged but not thrown,
  * preventing the RPC loop from being interrupted by transient Telegram API failures.
  */
@@ -160,13 +160,25 @@ export function createRpcTransformer(opts: RpcTransformerOptions): Transformer {
     } catch (error) {
       clearTimeout(timeoutId);
       opts.onError?.(method, error as Error);
-      
-      // For fire-and-forget methods, return a soft failure instead of throwing.
+
+      // For fire-and-forget methods, return a fake success response instead of throwing.
       // This prevents transient Telegram API errors from breaking the RPC loop.
+      // grammy checks `data.ok` and throws GrammyError if false, so we must return ok: true
+      // with a placeholder result to avoid exceptions propagating up the call stack.
       if (SOFT_FAIL_METHODS.has(method)) {
-        return { ok: false, error: (error as Error).message, soft_fail: true };
+        return {
+          ok: true,
+          result: {
+            message_id: -1,
+            date: Math.floor(Date.now() / 1000),
+            chat: { id: 0, type: "private" },
+            // Mark as soft failure for any code that wants to detect this
+            _rpc_soft_fail: true,
+            _rpc_error: (error as Error).message,
+          },
+        };
       }
-      
+
       throw error;
     }
   };
