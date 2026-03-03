@@ -847,7 +847,16 @@ export const chatHandlers: GatewayRequestHandlers = {
       const routeAccountIdCandidate =
         entry?.deliveryContext?.accountId ?? entry?.lastAccountId ?? undefined;
       const routeThreadIdCandidate = entry?.deliveryContext?.threadId ?? entry?.lastThreadId;
+      // Shared main sessions (dmScope=main/per-peer) don't embed a channel in
+      // the session key, so their lastChannel/deliveryContext may refer to any
+      // previously-used external channel — not the user's current WebChat intent.
+      // Only inherit for channel-specific sessions (per-channel-peer, groups)
+      // to avoid duplicate cross-channel delivery (#33619).
+      const keyParts = sessionKey.split(":");
+      const isChannelAgnosticSession =
+        keyParts.length <= 3 || (keyParts.length === 4 && keyParts[2] === "direct");
       const hasDeliverableRoute =
+        !isChannelAgnosticSession &&
         routeChannelCandidate &&
         routeChannelCandidate !== INTERNAL_MESSAGE_CHANNEL &&
         typeof routeToCandidate === "string" &&
