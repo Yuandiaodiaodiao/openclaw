@@ -1215,6 +1215,36 @@ describe("applyMediaUnderstanding", () => {
     expectFileNotApplied({ ctx, result, body: "<media:file>" });
   });
 
+  it("skips binary attachments when URL fallback has query params", async () => {
+    // Signed CDN URLs like Discord's have query params that confuse
+    // path.extname (returns ".msg?ex=abc..." instead of ".msg").
+    const printableOle = Buffer.from(
+      "D0CF11E0 OLE compound document with printable text " + "A".repeat(200),
+      "utf8",
+    );
+
+    // Simulate a URL-only attachment where fetchRemoteMedia returns the
+    // URL-derived filename with query params still attached.
+    const ctx: MsgContext = {
+      Body: "<media:file>",
+      MediaUrl: "https://cdn.discordapp.com/attachments/123/456/meeting.msg?ex=abc&is=def&hm=xyz",
+      MediaType: undefined,
+    };
+    mockedFetchRemoteMedia.mockResolvedValueOnce({
+      buffer: printableOle,
+      contentType: undefined,
+      // CDN-derived filename retains query params
+      fileName: "meeting.msg?ex=abc&is=def&hm=xyz",
+    });
+
+    const result = await applyMediaUnderstanding({
+      ctx,
+      cfg: createMediaDisabledConfig(),
+    });
+
+    expectFileNotApplied({ ctx, result, body: "<media:file>" });
+  });
+
   it("keeps vendor +json attachments eligible for text extraction", async () => {
     const filePath = await createTempMediaFile({
       fileName: "payload.bin",
