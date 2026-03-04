@@ -50,6 +50,12 @@ export async function writeViaSiblingTempPath(params: {
   let renameSucceeded = false;
   try {
     await params.writeTemp(tempPath);
+    // Reject hardlinked targets so an attacker cannot use a hardlink alias
+    // to write through to another file outside the allowed root.
+    const stat = await fs.lstat(targetPath).catch(() => null);
+    if (stat && stat.nlink > 1) {
+      throw new Error(`refusing to overwrite hardlinked target: ${targetPath}`);
+    }
     await fs.rename(tempPath, targetPath);
     renameSucceeded = true;
   } finally {
