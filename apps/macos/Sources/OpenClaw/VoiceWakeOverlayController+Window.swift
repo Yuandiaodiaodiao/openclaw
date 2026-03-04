@@ -24,8 +24,8 @@ extension VoiceWakeOverlayController {
             onFirstPresent: {
                 self.logger.log(
                     level: .info,
-                    “overlay present windowShown textLen=\(self.model.text.count, privacy: .public)”)
-                // Keep the status item in “listening” mode until we explicitly dismiss the overlay.
+                    "overlay present windowShown textLen=\(self.model.text.count, privacy: .public)")
+                // Keep the status item in "listening" mode until we explicitly dismiss the overlay.
                 AppStateStore.shared.triggerVoiceEars(ttl: nil)
             },
             onAlreadyVisible: { window in
