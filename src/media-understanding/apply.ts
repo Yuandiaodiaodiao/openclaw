@@ -86,7 +86,6 @@ const BINARY_FILE_EXTENSIONS = new Set([
   ".odt",
   ".ods",
   ".odp",
-  ".rtf",
   // Database / data
   ".db",
   ".sqlite",
@@ -143,7 +142,10 @@ function isBinaryFileExtension(name?: string): boolean {
   if (!name) {
     return false;
   }
-  const ext = path.extname(name).toLowerCase();
+  // Strip query string and fragment so signed CDN URLs like
+  // "meeting.msg?ex=abc&is=def" yield ".msg" instead of ".msg?ex=abc&is=def".
+  const cleanName = name.split("?")[0].split("#")[0];
+  const ext = path.extname(cleanName).toLowerCase();
   return BINARY_FILE_EXTENSIONS.has(ext);
 }
 
