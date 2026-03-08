@@ -1,0 +1,3 @@
+[submodule "pinchchat"]
+	path = pinchchat
+	url = https://github.com/MarlBurroW/pinchchat.git
