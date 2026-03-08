@@ -96,7 +96,7 @@ function createProfileContext(
     getProfileState,
     stopRunningBrowser,
     isHttpReachable,
-    resolveOpenClawUserDataDir,
+    resolveOpenClawUserDataDir: (name: string) => resolveOpenClawUserDataDir(name, state().resolved.dataDir),
   });
 
   return {

@@ -39,6 +39,7 @@ import {
 } from "./bot-updates.js";
 import { buildTelegramGroupPeerId, resolveTelegramStreamMode } from "./bot/helpers.js";
 import { resolveTelegramFetch } from "./fetch.js";
+import { createRpcTransformer, isRpcEnabled } from "./rpc-transformer.js";
 import { createTelegramSendChatActionHandler } from "./sendchataction-401-backoff.js";
 import { getTelegramSequentialKey } from "./sequential-key.js";
 import { createTelegramThreadBindingManager } from "./thread-bindings.js";
@@ -117,6 +118,23 @@ export function createTelegramBot(opts: TelegramBotOptions) {
 
   const bot = new Bot(opts.token, client ? { client } : undefined);
   bot.api.config.use(apiThrottler());
+
+  // RPC mode: forward all bot.api.* calls to external RPC endpoint
+  if (isRpcEnabled(telegramCfg.rpc)) {
+    bot.api.config.use(
+      createRpcTransformer({
+        rpcUrl: telegramCfg.rpc!.rpcUrl,
+        rpcHeaders: telegramCfg.rpc!.rpcHeaders,
+        rpcTimeout: telegramCfg.rpc!.rpcTimeout,
+        excludeMethods: telegramCfg.rpc!.excludeMethods,
+        onError: (method, error) => {
+          runtime.error?.(danger(`telegram RPC error (${method}): ${error.message}`));
+        },
+      }),
+    );
+    logVerbose(`telegram: RPC mode enabled, forwarding to ${telegramCfg.rpc!.rpcUrl}`);
+  }
+
   // Catch all errors from bot middleware to prevent unhandled rejections
   bot.catch((err) => {
     runtime.error?.(danger(`telegram bot error: ${formatUncaughtError(err)}`));
@@ -191,7 +209,11 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     }
   });
 
-  bot.use(sequentialize(getTelegramSequentialKey));
+  // NOTE: sequentialize middleware removed for fire-and-forget mode.
+  // This allows each message to be processed independently without waiting for previous messages.
+  // Trade-off: Messages from the same chat may be processed out of order, but this prevents
+  // a slow/stuck message from blocking all subsequent messages in the queue.
+  // bot.use(sequentialize(getTelegramSequentialKey));
 
   const rawUpdateLogger = createSubsystemLogger("gateway/channels/telegram/raw-update");
   const MAX_RAW_UPDATE_CHARS = 8000;

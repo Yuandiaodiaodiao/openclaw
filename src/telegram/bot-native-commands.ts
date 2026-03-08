@@ -154,6 +154,8 @@ async function resolveTelegramCommandAuth(params: {
     messageThreadId?: number,
   ) => { groupConfig?: TelegramGroupConfig; topicConfig?: TelegramTopicConfig };
   requireAuth: boolean;
+  /** When true, bypass all authentication checks (for external integration). */
+  bypassAuth?: boolean;
 }): Promise<TelegramCommandAuthResult | null> {
   const {
     msg,
@@ -167,6 +169,7 @@ async function resolveTelegramCommandAuth(params: {
     resolveGroupPolicy,
     resolveTelegramGroupConfig,
     requireAuth,
+    bypassAuth,
   } = params;
   const chatId = msg.chat.id;
   const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
@@ -256,7 +259,8 @@ async function resolveTelegramCommandAuth(params: {
     enforceAllowOverride: requireAuth,
     requireSenderForAllowOverride: true,
   });
-  if (!baseAccess.allowed) {
+  // When bypassAuth is true, skip all group/policy access checks (for external integration)
+  if (!baseAccess.allowed && !bypassAuth) {
     if (baseAccess.reason === "group-disabled") {
       return await sendAuthMessage("This group is disabled.");
     }
@@ -284,7 +288,7 @@ async function resolveTelegramCommandAuth(params: {
     requireSenderForAllowlistAuthorization: true,
     checkChatAllowlist: useAccessGroups,
   });
-  if (!policyAccess.allowed) {
+  if (!policyAccess.allowed && !bypassAuth) {
     if (policyAccess.reason === "group-policy-disabled") {
       return await sendAuthMessage("Telegram group commands are disabled.");
     }
@@ -324,7 +328,8 @@ async function resolveTelegramCommandAuth(params: {
         ],
         modeWhenAccessGroupsOff: "configured",
       });
-  if (requireAuth && !commandAuthorized) {
+  // When bypassAuth is true, always authorize commands
+  if (requireAuth && !commandAuthorized && !bypassAuth) {
     return await rejectNotAuthorized();
   }
 
@@ -561,6 +566,7 @@ export const registerTelegramNativeCommands = ({
             resolveGroupPolicy,
             resolveTelegramGroupConfig,
             requireAuth: true,
+            bypassAuth: telegramCfg.bypassAuth,
           });
           if (!auth) {
             return;
@@ -807,6 +813,7 @@ export const registerTelegramNativeCommands = ({
             resolveGroupPolicy,
             resolveTelegramGroupConfig,
             requireAuth: match.command.requireAuth !== false,
+            bypassAuth: telegramCfg.bypassAuth,
           });
           if (!auth) {
             return;

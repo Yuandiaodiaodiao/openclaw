@@ -58,6 +58,8 @@ export type BrowserConfig = {
   profiles?: Record<string, BrowserProfileConfig>;
   /** Default snapshot options (applied by the browser tool/CLI when unset). */
   snapshotDefaults?: BrowserSnapshotDefaults;
+  /** Custom data directory for browser profiles. Default: ~/.openclaw/browser */
+  dataDir?: string;
   /** SSRF policy for browser navigation/open-tab operations. */
   ssrfPolicy?: BrowserSsrFPolicyConfig;
   /**

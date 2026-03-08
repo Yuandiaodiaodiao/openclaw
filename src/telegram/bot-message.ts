@@ -48,6 +48,9 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     opts,
   } = deps;
 
+  // Resolve bypassAuth from telegramCfg (for external integration)
+  const bypassAuth = telegramCfg?.bypassAuth === true;
+
   return async (
     primaryCtx: TelegramContext,
     allMedia: TelegramMediaRef[],
@@ -75,6 +78,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
       resolveGroupRequireMention,
       resolveTelegramGroupConfig,
       sendChatActionHandler,
+      bypassAuth,
     });
     if (!context) {
       return;

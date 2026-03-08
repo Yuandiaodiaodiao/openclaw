@@ -36,6 +36,19 @@ export type TelegramNetworkConfig = {
   dnsResultOrder?: "ipv4first" | "verbatim";
 };
 
+export type TelegramRpcConfig = {
+  /** Enable RPC mode to forward all bot.api.* calls to an external service. */
+  enabled?: boolean;
+  /** URL of the RPC endpoint that will handle Telegram API calls. */
+  rpcUrl: string;
+  /** Optional headers to include with RPC requests (e.g., Authorization). */
+  rpcHeaders?: Record<string, string>;
+  /** Timeout in milliseconds for RPC requests. Default: 30000. */
+  rpcTimeout?: number;
+  /** Methods to exclude from RPC forwarding (will use direct Telegram API). */
+  excludeMethods?: string[];
+};
+
 export type TelegramInlineButtonsScope = "off" | "dm" | "group" | "all" | "allowlist";
 export type TelegramStreamingMode = "off" | "partial" | "block" | "progress";
 
@@ -54,6 +67,21 @@ export type TelegramCustomCommand = {
 };
 
 export type TelegramAccountConfig = {
+  /**
+   * Bypass all authentication checks for external integration.
+   * When true:
+   * - All DM policy checks are skipped
+   * - All allowlist checks are skipped
+   * - Useful when auth is handled externally and TG API is hooked
+   */
+  bypassAuth?: boolean;
+  /**
+   * Preset chat ID for external integration mode.
+   * When bypassAuth is true, this chat ID is used as the default target
+   * for incoming messages that are injected externally.
+   * Can also be set via TELEGRAM_PRESET_CHAT_ID environment variable.
+   */
+  presetChatId?: string | number;
   /** Optional display name for this account (used in CLI/UI lists). */
   name?: string;
   /** Optional provider capability tags used for agent/runtime guidance. */
@@ -165,6 +193,8 @@ export type TelegramAccountConfig = {
   heartbeat?: ChannelHeartbeatVisibilityConfig;
   /** Controls whether link previews are shown in outbound messages. Default: true. */
   linkPreview?: boolean;
+  /** RPC mode configuration to forward bot.api.* calls to an external service. */
+  rpc?: TelegramRpcConfig;
   /**
    * Per-channel outbound response prefix override.
    *

@@ -88,6 +88,12 @@ export async function startTelegramWebhook(opts: {
   healthPath?: string;
   publicUrl?: string;
   webhookCertPath?: string;
+  /**
+   * Skip calling setWebhook on Telegram API.
+   * Used in RPC mode where the relay-server manages the webhook registration,
+   * and the container only needs to listen for forwarded updates.
+   */
+  skipSetWebhook?: boolean;
 }) {
   const path = opts.path ?? "/telegram-webhook";
   const healthPath = opts.healthPath ?? "/healthz";
@@ -234,24 +240,29 @@ export async function startTelegramWebhook(opts: {
     port,
   });
 
-  try {
-    await withTelegramApiErrorLogging({
-      operation: "setWebhook",
-      runtime,
-      fn: () =>
-        bot.api.setWebhook(publicUrl, {
-          secret_token: secret,
-          allowed_updates: resolveTelegramAllowedUpdates(),
-          certificate: opts.webhookCertPath ? new InputFile(opts.webhookCertPath) : undefined,
-        }),
-    });
-  } catch (err) {
-    server.close();
-    void bot.stop();
-    if (diagnosticsEnabled) {
-      stopDiagnosticHeartbeat();
+  // In RPC mode, skip setWebhook - the relay-server manages webhook registration
+  if (!opts.skipSetWebhook) {
+    try {
+      await withTelegramApiErrorLogging({
+        operation: "setWebhook",
+        runtime,
+        fn: () =>
+          bot.api.setWebhook(publicUrl, {
+            secret_token: secret,
+            allowed_updates: resolveTelegramAllowedUpdates(),
+            certificate: opts.webhookCertPath ? new InputFile(opts.webhookCertPath) : undefined,
+          }),
+      });
+    } catch (err) {
+      server.close();
+      void bot.stop();
+      if (diagnosticsEnabled) {
+        stopDiagnosticHeartbeat();
+      }
+      throw err;
     }
-    throw err;
+  } else {
+    runtime.log?.("webhook: skipping setWebhook (RPC mode)");
   }
 
   runtime.log?.(`webhook local listener on http://${host}:${boundPort}${path}`);

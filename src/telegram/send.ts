@@ -29,6 +29,7 @@ import { resolveTelegramFetch } from "./fetch.js";
 import { renderTelegramHtmlText } from "./format.js";
 import { isRecoverableTelegramNetworkError, isSafeToRetrySendError } from "./network-errors.js";
 import { makeProxyFetch } from "./proxy.js";
+import { createRpcTransformer, isRpcEnabled } from "./rpc-transformer.js";
 import { recordSentMessage } from "./sent-message-cache.js";
 import { maybePersistResolvedTelegramTarget } from "./target-writeback.js";
 import {
@@ -333,7 +334,25 @@ function resolveTelegramApiContext(opts: {
   });
   const token = resolveToken(opts.token, account);
   const client = resolveTelegramClientOptions(account);
-  const api = (opts.api ?? new Bot(token, client ? { client } : undefined).api) as TelegramApi;
+  let api: TelegramApi;
+  if (opts.api) {
+    api = opts.api as TelegramApi;
+  } else {
+    const bot = new Bot(token, client ? { client } : undefined);
+    // Apply RPC transformer if RPC mode is enabled for this account
+    const telegramCfg = cfg.channels?.telegram;
+    if (isRpcEnabled(telegramCfg?.rpc)) {
+      bot.api.config.use(
+        createRpcTransformer({
+          rpcUrl: telegramCfg!.rpc!.rpcUrl,
+          rpcHeaders: telegramCfg!.rpc!.rpcHeaders,
+          rpcTimeout: telegramCfg!.rpc!.rpcTimeout,
+          excludeMethods: telegramCfg!.rpc!.excludeMethods,
+        }),
+      );
+    }
+    api = bot.api as TelegramApi;
+  }
   return { cfg, account, api };
 }
 

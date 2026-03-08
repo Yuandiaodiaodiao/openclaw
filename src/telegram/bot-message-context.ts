@@ -57,6 +57,7 @@ export const buildTelegramMessageContext = async ({
   resolveGroupRequireMention,
   resolveTelegramGroupConfig,
   sendChatActionHandler,
+  bypassAuth,
 }: BuildTelegramMessageContextParams) => {
   const msg = primaryCtx.message;
   const chatId = msg.chat.id;
@@ -130,7 +131,8 @@ export const buildTelegramMessageContext = async ({
     enforceAllowOverride: true,
     requireSenderForAllowOverride: false,
   });
-  if (!baseAccess.allowed) {
+  // When bypassAuth is true, skip group access checks (for external integration)
+  if (!baseAccess.allowed && !bypassAuth) {
     if (baseAccess.reason === "group-disabled") {
       logVerbose(`Blocked telegram group ${chatId} (group disabled)`);
       return null;
@@ -184,7 +186,9 @@ export const buildTelegramMessageContext = async ({
     }
   };
 
+  // When bypassAuth is true, skip all DM authentication checks (for external integration)
   if (
+    !bypassAuth &&
     !(await enforceTelegramDmAccess({
       isGroup,
       dmPolicy: effectiveDmPolicy,

@@ -36,6 +36,8 @@ export type ResolvedBrowserConfig = {
   profiles: Record<string, BrowserProfileConfig>;
   ssrfPolicy?: SsrFPolicy;
   extraArgs: string[];
+  /** Custom data directory for browser profiles. If undefined, uses default ~/.openclaw/browser */
+  dataDir?: string;
 };
 
 export type ResolvedBrowserProfile = {
@@ -277,6 +279,9 @@ export function resolveBrowserConfig(
     : [];
   const ssrfPolicy = resolveBrowserSsrFPolicy(cfg);
 
+  // Resolve custom dataDir if provided
+  const dataDir = cfg?.dataDir?.trim() || undefined;
+
   return {
     enabled,
     evaluateEnabled,
@@ -297,6 +302,7 @@ export function resolveBrowserConfig(
     profiles,
     ssrfPolicy,
     extraArgs,
+    dataDir,
   };
 }
 

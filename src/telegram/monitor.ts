@@ -31,6 +31,11 @@ export type MonitorTelegramOpts = {
   proxyFetch?: typeof fetch;
   webhookUrl?: string;
   webhookCertPath?: string;
+  /**
+   * Skip calling setWebhook on Telegram API.
+   * Used in RPC mode where the relay-server manages the webhook registration.
+   */
+  skipSetWebhook?: boolean;
 };
 
 export function createTelegramRunnerOptions(cfg: OpenClawConfig): RunOptions<unknown> {
@@ -201,6 +206,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
         abortSignal: opts.abortSignal,
         publicUrl: opts.webhookUrl,
         webhookCertPath: opts.webhookCertPath,
+        skipSetWebhook: opts.skipSetWebhook,
       });
       await waitForAbortSignal(opts.abortSignal);
       return;
