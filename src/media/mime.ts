@@ -1,5 +1,5 @@
-import path from "node:path";
 import { fileTypeFromBuffer } from "file-type";
+import path from "node:path";
 import { type MediaKind, mediaKindFromMime } from "./constants.js";
 
 // Map common mimes to preferred file extensions.
@@ -39,6 +39,32 @@ const MIME_BY_EXT: Record<string, string> = {
   // Additional extension aliases
   ".jpeg": "image/jpeg",
   ".js": "text/javascript",
+  ".ts": "text/typescript",
+  ".jsx": "text/javascript",
+  ".tsx": "text/typescript",
+  ".py": "text/x-python",
+  ".rb": "text/x-ruby",
+  ".go": "text/x-go",
+  ".rs": "text/x-rust",
+  ".java": "text/x-java",
+  ".c": "text/x-c",
+  ".cpp": "text/x-c++",
+  ".h": "text/x-c",
+  ".sh": "text/x-shellscript",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".css": "text/css",
+  ".xml": "text/xml",
+  ".yaml": "text/yaml",
+  ".yml": "text/yaml",
+  ".toml": "text/toml",
+  ".ini": "text/plain",
+  ".cfg": "text/plain",
+  ".conf": "text/plain",
+  ".log": "text/plain",
+  ".sql": "text/x-sql",
+  ".svg": "image/svg+xml",
+  ".wasm": "application/wasm",
 };
 
 const AUDIO_FILE_EXTENSIONS = new Set([

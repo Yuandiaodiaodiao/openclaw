@@ -1,4 +1,5 @@
 import { GrammyError } from "grammy";
+import type { StickerMetadata, TelegramContext } from "./types.js";
 import { logVerbose, warn } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { retryAsync } from "../../infra/retry.js";
@@ -6,7 +7,6 @@ import { fetchRemoteMedia } from "../../media/fetch.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import { cacheSticker, getCachedSticker } from "../sticker-cache.js";
 import { resolveTelegramMediaPlaceholder } from "./helpers.js";
-import type { StickerMetadata, TelegramContext } from "./types.js";
 
 const FILE_TOO_BIG_RE = /file is too big/i;
 const TELEGRAM_MEDIA_SSRF_POLICY = {
@@ -63,7 +63,10 @@ function resolveTelegramFileName(msg: TelegramContext["message"]): string | unde
 
 async function resolveTelegramFileWithRetry(
   ctx: TelegramContext,
-): Promise<{ file_path?: string } | null> {
+): Promise<{
+  file_path?: string;
+  _file_data?: { base64: string; content_type: string; size: number };
+} | null> {
   try {
     return await retryAsync(() => ctx.getFile(), {
       attempts: 3,
@@ -106,7 +109,27 @@ async function downloadAndSaveTelegramFile(params: {
   fetchImpl: typeof fetch;
   maxBytes: number;
   telegramFileName?: string;
+  /** Pre-downloaded file data from RPC getFile (avoids direct Telegram download) */
+  fileData?: { base64: string; content_type: string; size: number };
 }) {
+  // If file data was already downloaded by the RPC relay (e.g. HoldClaw RPC mode),
+  // use it directly instead of fetching from api.telegram.org.
+  // This is necessary because containers in RPC mode don't have the real bot token.
+  if (params.fileData?.base64) {
+    const buffer = Buffer.from(params.fileData.base64, "base64");
+    const contentType = params.fileData.content_type || "application/octet-stream";
+    const originalName = params.telegramFileName ?? params.filePath;
+    return saveMediaBuffer(buffer, contentType, "inbound", params.maxBytes, originalName);
+  }
+
+  // In RPC mode with a placeholder token, direct Telegram download will always fail.
+  // Throw immediately so the caller can show a meaningful error.
+  if (params.token === "placeholder") {
+    throw new Error(
+      "RPC relay did not provide file data and direct Telegram download is unavailable (RPC mode)",
+    );
+  }
+
   const url = `https://api.telegram.org/file/bot${params.token}/${params.filePath}`;
   const fetched = await fetchRemoteMedia({
     url,
@@ -171,6 +194,7 @@ async function resolveStickerMedia(params: {
       token,
       fetchImpl,
       maxBytes,
+      fileData: file._file_data,
     });
 
     // Check sticker cache for existing description
@@ -262,6 +286,7 @@ export async function resolveMedia(
     fetchImpl: resolveRequiredFetchImpl(proxyFetch),
     maxBytes,
     telegramFileName: resolveTelegramFileName(msg),
+    fileData: file._file_data,
   });
   const placeholder = resolveTelegramMediaPlaceholder(msg) ?? "<media:document>";
   return { path: saved.path, contentType: saved.contentType, placeholder };

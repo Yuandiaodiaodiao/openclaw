@@ -34,7 +34,7 @@ import {
 } from "./tool-runtime.helpers.js";
 
 const DEFAULT_PROMPT = "Describe the image.";
-const ANTHROPIC_IMAGE_PRIMARY = "anthropic/claude-opus-4-6";
+const ANTHROPIC_IMAGE_PRIMARY = "anthropic/claude-opus-4-5";
 const ANTHROPIC_IMAGE_FALLBACK = "anthropic/claude-opus-4-5";
 const DEFAULT_MAX_IMAGES = 20;
 
